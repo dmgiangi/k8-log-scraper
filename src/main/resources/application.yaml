@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: k8-log-scraper
+  shell:
+    history:
+      name: history.log
+
+  main:
+    banner-mode: off

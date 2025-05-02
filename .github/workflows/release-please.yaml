@@ -1,0 +1,105 @@
+name: Release Please
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Run tests with Maven
+        run: ./.mvn/mvnw test
+
+  release-pr:
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    outputs:
+      pr_was_created: ${{ steps.release.outputs.prs_created }}
+      pull_request_details: ${{ steps.release.outputs.pr }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4.2.0
+        with:
+          token: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
+
+  verify-pom-version:
+    needs: [ release-pr ]
+    if: ${{ needs.release-pr.outputs.pr_was_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract headBranchName from pull_request_details
+        id: extract_branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+        run: |
+          PR_NUMBER=$(echo '${{ needs.release-pr.outputs.pull_request_details }}' | jq -r '.number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Getting branch name from PR number: $PR_NUMBER"
+            HEAD_BRANCH_NAME=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | \
+              jq -r '.head.ref')
+          fi
+
+          if [ -z "$HEAD_BRANCH_NAME" ]; then
+            echo "Could not extract head branch name directly, using default release-please branch naming convention"
+            HEAD_BRANCH_NAME="release-please--branches--main"
+          fi
+
+          echo "HEAD_BRANCH_NAME=$HEAD_BRANCH_NAME" >> $GITHUB_ENV
+          echo "Extracted head branch name: $HEAD_BRANCH_NAME"
+
+      - name: Checkout pull request branch code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_BRANCH_NAME }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set RELEASE_VERSION environment
+        run: |
+          echo "RELEASE_VERSION=$(cat version.txt)" >> $GITHUB_ENV
+          echo "Release version from version.txt: $(cat version.txt)"
+
+      - name: Update POM
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+        run: |
+          POM_VERSION=$(./.mvn/mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+
+          echo "Current pom.xml version (main branch): $POM_VERSION"
+          echo "Release Please proposed version: $RELEASE_VERSION"
+
+          if [ "$POM_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Updating pom.xml version from $POM_VERSION to $RELEASE_VERSION"
+            ./.mvn/mvnw versions:set -DnewVersion=$RELEASE_VERSION -DgenerateBackupPoms=false
+
+            # Configure Git
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+
+            # Commit and push the changes
+            git add pom.xml
+            git commit -m "chore: update pom.xml version to $RELEASE_VERSION [skip ci]"
+            git push
+          else
+            echo "pom.xml does not need to upgrade the project version"
+          fi

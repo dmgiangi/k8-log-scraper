@@ -1,0 +1,107 @@
+name: Build and Upload Release Assets
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          version: '21'
+          java-version: '21'
+          distribution: 'graalvm-community'
+
+      - name: Build with Maven Native
+        run: ./.mvn/mvnw clean package -Pnative native:compile -DskipTests=true -Drevision="${{ github.ref_name }}"
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8-log-scraper-linux
+          path: target/k8-log-scraper
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          version: '21'
+          java-version: '21'
+          distribution: 'graalvm-community'
+
+      - name: Build with Maven Native
+        run: ./.mvn/mvnw clean package -Pnative native:compile -DskipTests=true -Drevision="${{ github.ref_name }}"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8-log-scraper-windows
+          path: target/k8-log-scraper.exe
+
+  create-release:
+    needs:
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get release upload URL
+        id: get_upload_url
+        run: echo "upload_url=$(gh release view ${{ github.ref_name }} --json uploadUrl -q .uploadUrl)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+
+      - name: Download Linux artifact
+        if: ${{ steps.get_upload_url.outputs.upload_url }}
+        uses: actions/download-artifact@v4
+        with:
+          name: k8-log-scraper-linux
+          path: ./artifacts/
+
+      - name: Download Windows artifact
+        if: ${{ steps.get_upload_url.outputs.upload_url }}
+        uses: actions/download-artifact@v4
+        with:
+          name: k8-log-scraper-windows
+          path: ./artifacts/
+
+      - name: Upload Linux Release Asset
+        if: ${{ steps.get_upload_url.outputs.upload_url }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_upload_url.outputs.upload_url }}
+          asset_path: ./artifacts/k8-log-scraper
+          asset_name: k8-log-scraper-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Windows Release Asset
+        if: ${{ steps.get_upload_url.outputs.upload_url }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_upload_url.outputs.upload_url }}
+          asset_path: ./artifacts/k8-log-scraper.exe
+          asset_name: k8-log-scraper.exe
+          asset_content_type: application/octet-stream
