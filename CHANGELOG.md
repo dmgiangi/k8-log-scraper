@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.2](https://github.com/dmgiangi/k8-log-scraper/compare/v0.0.1...v0.0.2) (2025-05-02)
+
+
+### 🐞 Bug Fixes
+
+* test pipe ([a610140](https://github.com/dmgiangi/k8-log-scraper/commit/a610140cd0b5e6e09d31932add4c13d7494d8e6e))
+* test pipe ([a610140](https://github.com/dmgiangi/k8-log-scraper/commit/a610140cd0b5e6e09d31932add4c13d7494d8e6e))
+* test pipe ([568a69a](https://github.com/dmgiangi/k8-log-scraper/commit/568a69a84e60520703cca029a2072ec7295a6622))
+
 ## [0.2.0](https://github.com/dmgiangi/k8-log-scraper/compare/v0.1.0...v0.2.0) (2025-05-02)
 
 ### 🚀 Features

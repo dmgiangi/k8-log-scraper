@@ -11,7 +11,7 @@
 
     <groupId>dev.dmgiangi</groupId>
     <artifactId>k8-log-scraper</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
     <name>k8-log-scraper</name>
     <description>
         Shell executable to scrape, filter, and organize logs from Kubernetes clusters.
